@@ -20,9 +20,6 @@
         
         <!-- 右侧图标 -->
         <div class="header-icons">
-          <button class="icon-btn" @click="showSettings = !showSettings">
-            🔒
-          </button>
           <button class="icon-btn" @click="refreshTodos">
             🔄
           </button>
@@ -30,12 +27,6 @@
             ⚙️
           </button>
         </div>
-      </div>
-
-      <!-- 功能说明 -->
-      <div class="instructions">
-        <div class="instruction-item">• 左滑或长按任务可设置提醒</div>
-        <div class="instruction-item">• 双击完成/还原任务</div>
       </div>
 
       <!-- 添加任务输入框 -->
@@ -55,6 +46,10 @@
           v-for="todo in filteredTodos"
           :key="todo.id"
           :todo="todo"
+          draggable="true"
+          @dragstart="dragStart($event, todo)"
+          @dragover.prevent
+          @drop="drop($event, todo)"
           @toggle="toggleTodo"
           @delete="deleteTodo"
           @set-reminder="setReminder"
@@ -188,6 +183,29 @@ const editTodo = (id, newText) => {
     saveTodos()
   }
 }
+
+// 拖曳相关的状态和方法
+const draggedTodo = ref(null)
+
+const dragStart = (event, todo) => {
+  draggedTodo.value = todo
+}
+
+const drop = (event, targetTodo) => {
+  event.preventDefault()
+  if (!draggedTodo.value || draggedTodo.value.id === targetTodo.id) return
+
+  // 获取源和目标的索引
+  const sourceIndex = todos.value.findIndex(t => t.id === draggedTodo.value.id)
+  const targetIndex = todos.value.findIndex(t => t.id === targetTodo.id)
+
+  // 交换位置
+  const temp = todos.value[sourceIndex]
+  todos.value[sourceIndex] = todos.value[targetIndex]
+  todos.value[targetIndex] = temp
+
+  draggedTodo.value = null
+}
 </script>
 
 <style scoped>
@@ -198,7 +216,7 @@ const editTodo = (id, newText) => {
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  padding: 20px;
+  padding: 0px;
 }
 
 .container {
@@ -368,5 +386,14 @@ const editTodo = (id, newText) => {
   padding: 12px;
   cursor: pointer;
   margin-top: 16px;
+}
+
+.todo-list > * {
+  cursor: move;
+  user-select: none;
+}
+
+.todo-list > *:active {
+  opacity: 0.8;
 }
 </style>

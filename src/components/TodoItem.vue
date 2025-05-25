@@ -158,7 +158,7 @@ const updateDueDate = (event) => {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  background: rgba(255, 255, 255, 0.8);
+  background: transparent; /* 将背景设置为透明 */
   border-radius: 8px;
   margin-bottom: 10px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -168,7 +168,7 @@ const updateDueDate = (event) => {
 }
 
 .todo-item:hover {
-  background: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.1); /* 鼠标悬停时可以稍微改变背景以提供视觉反馈 */
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
 }
 
@@ -199,7 +199,7 @@ const updateDueDate = (event) => {
 
 .todo-time {
   font-size: 12px;
-  color: #666;
+  color: white; /* 将字体颜色改为白色 */
 }
 
 .reminder-indicator {
