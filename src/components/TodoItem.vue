@@ -1,5 +1,10 @@
 <template>
-  <div class="todo-item" :class="{ completed: todo.completed }">
+  <div 
+    class="todo-item" 
+    :class="{ completed: todo.completed }"
+    @dragstart="handleDragStart"
+    @dragend="handleDragEnd"
+  >
     <div class="todo-content" @click="toggleEdit">
       <div v-if="isEditing" class="edit-mode">
         <input 
@@ -9,6 +14,7 @@
           @blur="saveEdit"
           ref="editInput"
           @click.stop
+          @mousedown.stop
         />
       </div>
       <div v-else class="display-mode">
@@ -26,17 +32,17 @@
     </div>
     
     <div class="action-icons">
-      <button class="icon-btn edit-btn" @click.stop="startEdit" title="编辑任务">
+      <button class="icon-btn edit-btn" @click.stop="startEdit" @mousedown.stop title="编辑任务">
         ✏️
       </button>
-      <button class="icon-btn delete-btn" @click.stop="$emit('delete', todo.id)" title="删除任务">
+      <button class="icon-btn delete-btn" @click.stop="$emit('delete', todo.id)" @mousedown.stop title="删除任务">
         🗑️
       </button>
-      <button class="icon-btn complete-btn" @click.stop="$emit('toggle', todo.id)" title="完成/取消完成任务">
+      <button class="icon-btn complete-btn" @click.stop="$emit('toggle', todo.id)" @mousedown.stop title="完成/取消完成任务">
         {{ todo.completed ? '↩️' : '✅' }}
       </button>
       <div class="calendar-wrapper">
-        <button class="icon-btn calendar-btn" @click.stop="openDatePicker" title="设置截止日期">
+        <button class="icon-btn calendar-btn" @click.stop="openDatePicker" @mousedown.stop title="设置截止日期">
           📅
         </button>
         
@@ -46,6 +52,7 @@
           ref="datePicker"
           @change="updateDueDate"
           @click.stop
+          @mousedown.stop
           :value="todo.dueDate ? formatDateForInput(todo.dueDate) : ''"
           class="hidden-date-picker"
         />
@@ -70,6 +77,17 @@ const isEditing = ref(false);
 const editedText = ref('');
 const editInput = ref(null);
 const datePicker = ref(null);
+
+// 处理拖动开始事件，阻止冒泡
+const handleDragStart = (event) => {
+  event.stopPropagation()
+  // 这里可以添加任务项拖动的逻辑
+}
+
+// 处理拖动结束事件
+const handleDragEnd = (event) => {
+  event.stopPropagation()
+}
 
 const toggleEdit = () => {
   // 点击整个项目不再触发编辑模式

@@ -1,6 +1,19 @@
 <template>
-  <div class="app">
-    <div class="container">
+  <div 
+    class="app" 
+    @mousedown="startPageDrag"
+    @mousemove="handlePageDrag"
+    @mouseup="endPageDrag"
+    @mouseleave="endPageDrag"
+    :style="{ cursor: isDraggingPage ? 'grabbing' : 'grab' }"
+  >
+    <div 
+      class="container"
+      :style="{
+        transform: `translate(${pageOffset.x}px, ${pageOffset.y}px)`,
+        transition: isDraggingPage ? 'none' : 'transform 0.3s ease'
+      }"
+    >
       <!-- 头部标签页 -->
       <div class="header">
         <div class="tabs">
@@ -26,6 +39,9 @@
           <button class="icon-btn" @click="showSettings = !showSettings">
             ⚙️
           </button>
+          <button class="icon-btn" @click="resetPagePosition" title="重置页面位置">
+            🎯
+          </button>
         </div>
       </div>
 
@@ -36,8 +52,9 @@
           @keyup.enter="addTodo"
           placeholder="添加新任务..."
           class="todo-input"
+          @mousedown.stop
         />
-        <button @click="addTodo" class="add-btn">+</button>
+        <button @click="addTodo" class="add-btn" @mousedown.stop>+</button>
       </div>
 
       <!-- 任务列表 -->
@@ -55,13 +72,14 @@
           @set-reminder="setReminder"
           @edit="editTodo"
           @set-due-date="setDueDate"
+          @mousedown.stop="handleTodoMouseDown"
         />
       </div>
     </div>
 
     <!-- 设置弹窗 -->
-    <div v-if="showSettings" class="settings-overlay" @click="showSettings = false">
-      <div class="settings-panel" @click.stop>
+    <div v-if="showSettings" class="settings-overlay" @click="showSettings = false" @mousedown.stop>
+      <div class="settings-panel" @click.stop @mousedown.stop>
         <h3>设置</h3>
         <div class="setting-item">
           <label>主题颜色</label>
@@ -70,6 +88,10 @@
         <div class="setting-item">
           <label>自动保存</label>
           <input type="checkbox" v-model="autoSave" />
+        </div>
+        <div class="setting-item">
+          <label>页面拖动</label>
+          <input type="checkbox" v-model="enablePageDrag" />
         </div>
         <button @click="showSettings = false" class="close-btn">关闭</button>
       </div>
@@ -88,6 +110,13 @@ const todos = ref([])
 const showSettings = ref(false)
 const themeColor = ref('#007AFF')
 const autoSave = ref(true)
+
+// 页面拖动相关状态
+const enablePageDrag = ref(true)
+const isDraggingPage = ref(false)
+const pageOffset = ref({ x: 0, y: 0 })
+const dragStartPos = ref({ x: 0, y: 0 })
+const initialOffset = ref({ x: 0, y: 0 })
 
 // 计算属性
 const filteredTodos = computed(() => {
@@ -206,6 +235,53 @@ const drop = (event, targetTodo) => {
 
   draggedTodo.value = null
 }
+
+// 页面拖动方法
+const startPageDrag = (event) => {
+  if (!enablePageDrag.value) return
+  
+  // 检查是否点击在交互元素上
+  const target = event.target
+  if (target.tagName === 'INPUT' || 
+      target.tagName === 'BUTTON' || 
+      target.closest('.todo-item') ||
+      target.closest('.settings-panel')) {
+    return
+  }
+  
+  isDraggingPage.value = true
+  dragStartPos.value = { x: event.clientX, y: event.clientY }
+  initialOffset.value = { ...pageOffset.value }
+  
+  event.preventDefault()
+}
+
+const handlePageDrag = (event) => {
+  if (!isDraggingPage.value || !enablePageDrag.value) return
+  
+  const deltaX = event.clientX - dragStartPos.value.x
+  const deltaY = event.clientY - dragStartPos.value.y
+  
+  pageOffset.value = {
+    x: initialOffset.value.x + deltaX,
+    y: initialOffset.value.y + deltaY
+  }
+  
+  event.preventDefault()
+}
+
+const endPageDrag = () => {
+  isDraggingPage.value = false
+}
+
+const resetPagePosition = () => {
+  pageOffset.value = { x: 0, y: 0 }
+}
+
+const handleTodoMouseDown = (event) => {
+  // 阻止任务项的鼠标按下事件冒泡到页面拖动处理器
+  event.stopPropagation()
+}
 </script>
 
 <style scoped>
@@ -217,6 +293,8 @@ const drop = (event, targetTodo) => {
   justify-content: center;
   align-items: flex-start;
   padding: 0px;
+  overflow: hidden; /* 防止拖动时出现滚动条 */
+  user-select: none; /* 防止拖动时选中文本 */
 }
 
 .container {
@@ -229,6 +307,7 @@ const drop = (event, targetTodo) => {
   -webkit-backdrop-filter: blur(10px);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.1);
+  position: relative;
 }
 
 .header {
@@ -395,5 +474,11 @@ const drop = (event, targetTodo) => {
 
 .todo-list > *:active {
   opacity: 0.8;
+}
+
+/* 页面拖动时的视觉反馈 */
+.app[style*="grabbing"] .container {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+  transform-origin: center;
 }
 </style>
