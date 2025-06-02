@@ -175,19 +175,18 @@ const updateDueDate = (event) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  background: transparent; /* 将背景设置为透明 */
+  padding: 12px 0;
+  background: transparent;
   border-radius: 8px;
-  margin-bottom: 10px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  margin-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   position: relative;
   overflow: visible;
   transition: all 0.3s ease;
 }
 
 .todo-item:hover {
-  background: rgba(255, 255, 255, 0.1); /* 鼠标悬停时可以稍微改变背景以提供视觉反馈 */
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .todo-content {

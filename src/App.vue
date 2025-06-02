@@ -1,80 +1,54 @@
 <template>
-  <div 
-    class="app" 
-    @mousedown="startPageDrag"
-    @mousemove="handlePageDrag"
-    @mouseup="endPageDrag"
-    @mouseleave="endPageDrag"
-    :style="{ cursor: isDraggingPage ? 'grabbing' : 'grab' }"
-  >
-    <div 
-      class="container"
-      :style="{
-        transform: `translate(${pageOffset.x}px, ${pageOffset.y}px)`,
-        transition: isDraggingPage ? 'none' : 'transform 0.3s ease'
-      }"
-    >
-      <!-- 头部标签页 -->
-      <div class="header">
-        <div class="tabs">
-          <button 
-            :class="['tab', { active: activeTab === 'todo' }]"
-            @click="activeTab = 'todo'"
-          >
-            Todo
-          </button>
-          <button 
-            :class="['tab', { active: activeTab === 'done' }]"
-            @click="activeTab = 'done'"
-          >
-            Done
-          </button>
-        </div>
-        
-        <!-- 右侧图标 -->
-        <div class="header-icons">
-          <button class="icon-btn" @click="refreshTodos">
-            🔄
-          </button>
-          <button class="icon-btn" @click="showSettings = !showSettings">
-            ⚙️
-          </button>
-          <button class="icon-btn" @click="resetPagePosition" title="重置页面位置">
-            🎯
-          </button>
-        </div>
+  <div class="app">
+    <!-- 头部标签页 -->
+    <div class="header">
+      <div class="tabs">
+        <button 
+          :class="['tab', { active: activeTab === 'todo' }]"
+          @click="activeTab = 'todo'"
+        >
+          Todo
+        </button>
+        <button 
+          :class="['tab', { active: activeTab === 'done' }]"
+          @click="activeTab = 'done'"
+        >
+          Done
+        </button>
       </div>
+      
 
-      <!-- 添加任务输入框 -->
-      <div class="add-todo" v-if="activeTab === 'todo'">
-        <input 
-          v-model="newTodo"
-          @keyup.enter="addTodo"
-          placeholder="添加新任务..."
-          class="todo-input"
-          @mousedown.stop
-        />
-        <button @click="addTodo" class="add-btn" @mousedown.stop>+</button>
-      </div>
+    </div>
 
-      <!-- 任务列表 -->
-      <div class="todo-list">
-        <TodoItem
-          v-for="todo in filteredTodos"
-          :key="todo.id"
-          :todo="todo"
-          draggable="true"
-          @dragstart="dragStart($event, todo)"
-          @dragover.prevent
-          @drop="drop($event, todo)"
-          @toggle="toggleTodo"
-          @delete="deleteTodo"
-          @set-reminder="setReminder"
-          @edit="editTodo"
-          @set-due-date="setDueDate"
-          @mousedown.stop="handleTodoMouseDown"
-        />
-      </div>
+    <!-- 添加任务输入框 -->
+    <div class="add-todo" v-if="activeTab === 'todo'">
+      <input 
+        v-model="newTodo"
+        @keyup.enter="addTodo"
+        placeholder="添加新任务..."
+        class="todo-input"
+        @mousedown.stop
+      />
+      <button @click="addTodo" class="add-btn" @mousedown.stop>+</button>
+    </div>
+
+    <!-- 任务列表 -->
+    <div class="todo-list">
+      <TodoItem
+        v-for="(todo, index) in filteredTodos"
+        :key="todo.id"
+        :todo="todo"
+        :class="{
+          'dragging': isDraggingTodo && draggedTodoItem?.id === todo.id,
+          'drag-over': dragOverIndex === index
+        }"
+        @toggle="toggleTodo"
+        @delete="deleteTodo"
+        @set-reminder="setReminder"
+        @edit="editTodo"
+        @set-due-date="setDueDate"
+        @mousedown="handleTodoMouseDown($event, todo)"
+      />
     </div>
 
     <!-- 设置弹窗 -->
@@ -100,8 +74,11 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import TodoItem from './components/TodoItem.vue'
+
+// 重新添加 Tauri API 用于窗口尺寸调整
+import { getCurrentWindow } from '@tauri-apps/api/window'
 
 // 响应式数据
 const activeTab = ref('todo')
@@ -111,12 +88,7 @@ const showSettings = ref(false)
 const themeColor = ref('#007AFF')
 const autoSave = ref(true)
 
-// 页面拖动相关状态
-const enablePageDrag = ref(true)
-const isDraggingPage = ref(false)
-const pageOffset = ref({ x: 0, y: 0 })
-const dragStartPos = ref({ x: 0, y: 0 })
-const initialOffset = ref({ x: 0, y: 0 })
+// 移除页面拖动相关状态，使用 CSS 拖动方案
 
 // 计算属性
 const filteredTodos = computed(() => {
@@ -130,7 +102,7 @@ const filteredTodos = computed(() => {
 })
 
 // 方法
-const addTodo = () => {
+const addTodo = async () => {
   if (newTodo.value.trim()) {
     todos.value.push({
       id: Date.now(),
@@ -142,20 +114,23 @@ const addTodo = () => {
     })
     newTodo.value = ''
     saveTodos()
+    // ResizeObserver 会自动检测尺寸变化
   }
 }
 
-const toggleTodo = (id) => {
+const toggleTodo = async (id) => {
   const todo = todos.value.find(t => t.id === id)
   if (todo) {
     todo.completed = !todo.completed
     saveTodos()
+    // ResizeObserver 会自动检测尺寸变化
   }
 }
 
-const deleteTodo = (id) => {
+const deleteTodo = async (id) => {
   todos.value = todos.value.filter(t => t.id !== id)
   saveTodos()
+  // ResizeObserver 会自动检测尺寸变化
 }
 
 const setReminder = (id, reminderTime) => {
@@ -193,8 +168,27 @@ const loadTodos = () => {
 }
 
 // 生命周期
-onMounted(() => {
+onMounted(async () => {
+  // 先加载待办事项
   loadTodos()
+
+  // 等待 DOM 渲染完成，确保待办事项都已渲染
+  await nextTick()
+
+  // 再等待一段时间确保所有组件都已渲染完成
+  setTimeout(() => {
+    // 初始化 ResizeObserver
+    initResizeObserver()
+
+    // 立即调整窗口尺寸以匹配当前内容
+    updateWindowSize()
+
+    console.log('Initial window size adjustment completed')
+  }, 200) // 增加延迟时间确保所有内容都已加载
+})
+
+onUnmounted(() => {
+  cleanupResizeObserver()
 })
 
 // 监听器
@@ -202,6 +196,12 @@ watch(autoSave, (newVal) => {
   if (newVal) {
     saveTodos()
   }
+})
+
+// 监听标签页切换，ResizeObserver 会自动检测尺寸变化
+watch(activeTab, async () => {
+  await nextTick()
+  // ResizeObserver 会自动检测尺寸变化
 })
 
 // 添加编辑任务的方法
@@ -213,108 +213,206 @@ const editTodo = (id, newText) => {
   }
 }
 
-// 拖曳相关的状态和方法
-const draggedTodo = ref(null)
+// 在 <script setup> 中添加新的拖拽实现
 
-const dragStart = (event, todo) => {
-  draggedTodo.value = todo
-}
+// 任务项拖拽相关状态
+const draggedTodoItem = ref(null)
+const isDraggingTodo = ref(false)
+const todoStartPos = ref({ x: 0, y: 0 })
+const dragOverIndex = ref(-1)
 
-const drop = (event, targetTodo) => {
-  event.preventDefault()
-  if (!draggedTodo.value || draggedTodo.value.id === targetTodo.id) return
-
-  // 获取源和目标的索引
-  const sourceIndex = todos.value.findIndex(t => t.id === draggedTodo.value.id)
-  const targetIndex = todos.value.findIndex(t => t.id === targetTodo.id)
-
-  // 交换位置
-  const temp = todos.value[sourceIndex]
-  todos.value[sourceIndex] = todos.value[targetIndex]
-  todos.value[targetIndex] = temp
-
-  draggedTodo.value = null
-}
-
-// 页面拖动方法
-const startPageDrag = (event) => {
-  if (!enablePageDrag.value) return
-  
-  // 检查是否点击在交互元素上
-  const target = event.target
-  if (target.tagName === 'INPUT' || 
-      target.tagName === 'BUTTON' || 
-      target.closest('.todo-item') ||
-      target.closest('.settings-panel')) {
-    return
-  }
-  
-  isDraggingPage.value = true
-  dragStartPos.value = { x: event.clientX, y: event.clientY }
-  initialOffset.value = { ...pageOffset.value }
-  
-  event.preventDefault()
-}
-
-const handlePageDrag = (event) => {
-  if (!isDraggingPage.value || !enablePageDrag.value) return
-  
-  const deltaX = event.clientX - dragStartPos.value.x
-  const deltaY = event.clientY - dragStartPos.value.y
-  
-  pageOffset.value = {
-    x: initialOffset.value.x + deltaX,
-    y: initialOffset.value.y + deltaY
-  }
-  
-  event.preventDefault()
-}
-
-const endPageDrag = () => {
-  isDraggingPage.value = false
-}
-
-const resetPagePosition = () => {
-  pageOffset.value = { x: 0, y: 0 }
-}
-
-const handleTodoMouseDown = (event) => {
-  // 阻止任务项的鼠标按下事件冒泡到页面拖动处理器
+// 替换原有的拖拽方法
+const startTodoDrag = (event, todo) => {
   event.stopPropagation()
+  draggedTodoItem.value = todo
+  isDraggingTodo.value = true
+  todoStartPos.value = { x: event.clientX, y: event.clientY }
+  
+  // 添加全局鼠标事件监听
+  document.addEventListener('mousemove', handleTodoDrag)
+  document.addEventListener('mouseup', endTodoDrag)
+}
+
+const handleTodoDrag = (event) => {
+  if (!isDraggingTodo.value) return
+  
+  // 计算鼠标位置对应的任务项索引
+  const todoElements = document.querySelectorAll('.todo-item')
+  let newIndex = -1
+  
+  for (let i = 0; i < todoElements.length; i++) {
+    const rect = todoElements[i].getBoundingClientRect()
+    if (event.clientY >= rect.top && event.clientY <= rect.bottom) {
+      newIndex = i
+      break
+    }
+  }
+  
+  dragOverIndex.value = newIndex
+}
+
+const endTodoDrag = (event) => {
+  if (!isDraggingTodo.value) return
+  
+  // 移除全局事件监听
+  document.removeEventListener('mousemove', handleTodoDrag)
+  document.removeEventListener('mouseup', endTodoDrag)
+  
+  if (dragOverIndex.value >= 0 && draggedTodoItem.value) {
+    // 执行拖拽交换逻辑
+    const currentTodos = filteredTodos.value
+    const draggedIndex = currentTodos.findIndex(t => t.id === draggedTodoItem.value.id)
+    const targetIndex = dragOverIndex.value
+    
+    if (draggedIndex !== targetIndex && draggedIndex >= 0) {
+      // 在原数组中找到对应位置并交换
+      const allTodos = todos.value
+      const draggedTodoInAll = allTodos.findIndex(t => t.id === draggedTodoItem.value.id)
+      const targetTodoInAll = allTodos.findIndex(t => t.id === currentTodos[targetIndex].id)
+      
+      if (draggedTodoInAll >= 0 && targetTodoInAll >= 0) {
+        const temp = allTodos[draggedTodoInAll]
+        allTodos[draggedTodoInAll] = allTodos[targetTodoInAll]
+        allTodos[targetTodoInAll] = temp
+        saveTodos()
+      }
+    }
+  }
+  
+  // 重置状态
+  isDraggingTodo.value = false
+  draggedTodoItem.value = null
+  dragOverIndex.value = -1
+}
+
+// 修改 handleTodoMouseDown 方法
+const handleTodoMouseDown = (event, todo) => {
+  // 检查是否是在任务项的可拖拽区域
+  const target = event.target
+  if (target.tagName === 'INPUT' || target.tagName === 'BUTTON' || target.closest('button') || target.closest('.action-icons')) {
+    return // 如果点击的是输入框或按钮，不启动拖拽
+  }
+
+  // 只有在任务项的文本区域才启动任务拖拽
+  if (target.closest('.todo-content')) {
+    event.stopPropagation()
+
+    // 延迟启动拖拽，避免与点击事件冲突
+    setTimeout(() => {
+      if (event.buttons === 1) { // 确保鼠标左键仍然按下
+        startTodoDrag(event, todo)
+      }
+    }, 100)
+  }
+}
+
+// 移除复杂的拖动方法，使用 CSS -webkit-app-region: drag
+
+// ResizeObserver 实例
+let resizeObserver = null
+
+// 窗口尺寸自适应功能
+const updateWindowSize = async (appElement) => {
+  try {
+    if (!appElement) {
+      appElement = document.querySelector('.app')
+    }
+
+    if (appElement) {
+      const appWindow = getCurrentWindow()
+
+      // 获取应用元素的实际尺寸
+      const rect = appElement.getBoundingClientRect()
+      const newWidth = Math.max(300, Math.min(500, rect.width))
+      const newHeight = Math.max(400, Math.min(800, rect.height))
+
+      console.log(`App element size: ${rect.width}x${rect.height}`)
+      console.log(`Updating window size to: ${newWidth}x${newHeight}`)
+
+      // 获取当前窗口尺寸进行比较
+      const currentSize = await appWindow.innerSize()
+      console.log(`Current window size: ${currentSize.width}x${currentSize.height}`)
+
+      // 只有当尺寸确实需要改变时才调整
+      if (Math.abs(currentSize.width - newWidth) > 5 || Math.abs(currentSize.height - newHeight) > 5) {
+        await appWindow.setSize({ width: newWidth, height: newHeight })
+        console.log(`Window size updated to: ${newWidth}x${newHeight}`)
+      } else {
+        console.log('Window size already matches, no update needed')
+      }
+    }
+  } catch (error) {
+    console.error('Failed to update window size:', error)
+  }
+}
+
+// 初始化 ResizeObserver
+const initResizeObserver = () => {
+  const appElement = document.querySelector('.app')
+
+  if (appElement && window.ResizeObserver) {
+    resizeObserver = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        // 使用 setTimeout 确保 DOM 更新完成
+        setTimeout(() => {
+          updateWindowSize(entry.target)
+        }, 50)
+      }
+    })
+
+    resizeObserver.observe(appElement)
+    console.log('ResizeObserver initialized')
+  } else {
+    console.warn('ResizeObserver not supported or app element not found')
+  }
+}
+
+// 清理 ResizeObserver
+const cleanupResizeObserver = () => {
+  if (resizeObserver) {
+    resizeObserver.disconnect()
+    resizeObserver = null
+  }
 }
 </script>
 
 <style scoped>
 .app {
-  width: 100vw;
-  height: 100vh;
-  background: transparent;
+  /* 桌面挂件样式 - 矩形版本 */
+  width: 350px;
+  min-height: 400px;
+  background: rgba(40, 44, 52, 0.85);
+  border-radius: 0; /* 改为矩形 */
+  padding: 0;
+  margin: 0;
+  position: relative;
   display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  padding: 0px;
-  overflow: hidden; /* 防止拖动时出现滚动条 */
-  user-select: none; /* 防止拖动时选中文本 */
+  flex-direction: column;
+
+  /* 毛玻璃效果 */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+
+  /* 保持拖动功能需要的样式 */
+  user-select: none;
 }
 
-.container {
-  width: 100%;
-  max-width: 400px;
-  background: rgba(30, 30, 30, 0.65);
-  border-radius: 12px;
-  padding: 20px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  position: relative;
-}
+/* 移除原来的.container样式，因为已经合并到.app中 */
 
 .header {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
-  margin-bottom: 20px;
+  padding: 16px 20px;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  margin-bottom: 0;
+
+  /* 使标题区域可拖动 */
+  -webkit-app-region: drag;
+  user-select: none;
 }
 
 .tabs {
@@ -325,22 +423,28 @@ const handleTodoMouseDown = (event) => {
 .tab {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.6);
-  font-size: 20px;
-  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 18px;
+  font-weight: 500;
   padding: 8px 16px;
   cursor: pointer;
   transition: all 0.3s ease;
+  border-radius: 6px;
+
+  /* 确保按钮可以点击，不被拖动影响 */
+  -webkit-app-region: no-drag;
 }
 
 .tab.active {
-  color: white;
-  font-size: 28px;
-  font-weight: 700;
+  color: #ffffff;
+  font-size: 18px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .tab:hover {
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.05);
 }
 
 .header-icons {
@@ -351,36 +455,30 @@ const handleTodoMouseDown = (event) => {
 .icon-btn {
   background: transparent;
   border: none;
-  font-size: 18px;
+  font-size: 16px;
   cursor: pointer;
   padding: 6px;
   border-radius: 6px;
   transition: background 0.3s;
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .icon-btn:hover {
   background: rgba(255, 255, 255, 0.1);
-}
-
-.instructions {
-  margin-bottom: 20px;
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.7);
-}
-
-.instruction-item {
-  margin-bottom: 4px;
+  color: rgba(255, 255, 255, 1);
 }
 
 .add-todo {
   display: flex;
   gap: 10px;
-  margin-bottom: 20px;
+  padding: 20px;
+  background: transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .todo-input {
   flex: 1;
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: 8px;
   padding: 12px;
@@ -394,11 +492,12 @@ const handleTodoMouseDown = (event) => {
 
 .todo-input:focus {
   outline: none;
-  border-color: #007AFF;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.15);
 }
 
 .add-btn {
-  background: #007AFF;
+  background: rgba(255, 255, 255, 0.2);
   border: none;
   border-radius: 8px;
   color: white;
@@ -410,12 +509,13 @@ const handleTodoMouseDown = (event) => {
 }
 
 .add-btn:hover {
-  background: #0056CC;
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .todo-list {
-  max-height: 400px;
+  flex: 1;
   overflow-y: auto;
+  padding: 0 20px 20px 20px;
 }
 
 .settings-overlay {
@@ -476,9 +576,26 @@ const handleTodoMouseDown = (event) => {
   opacity: 0.8;
 }
 
-/* 页面拖动时的视觉反馈 */
-.app[style*="grabbing"] .container {
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
-  transform-origin: center;
+/* 拖动区域样式 - 使用 CSS 拖动方案 */
+.header {
+  cursor: grab;
+}
+
+.header:active {
+  cursor: grabbing;
+}
+
+.todo-list .todo-item.dragging {
+  opacity: 0.5;
+  transform: scale(1.05);
+  z-index: 1000;
+}
+
+.todo-list .todo-item.drag-over {
+  border-top: 2px solid #007AFF;
+}
+
+.todo-list .todo-item {
+  transition: all 0.2s ease;
 }
 </style>

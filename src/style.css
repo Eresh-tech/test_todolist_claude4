@@ -6,18 +6,24 @@
 
 body {
   background: transparent;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
   color: white;
   overflow: hidden;
   user-select: none;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 #app {
   width: 100vw;
-  /* height: 100vh; */
-  /* background: rgba(255, 255, 255, 0.2);  将背景设置为带有透明度的浅白色 */
-   background: transparent;  /* 移除或注释掉原来的透明背景 */
-  /* 其他样式保持不变 */
+  min-height: 100vh;
+  background: transparent;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
 }
 
 /* 滚动条样式 */
